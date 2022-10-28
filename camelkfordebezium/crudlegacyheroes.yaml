@@ -1,0 +1,170 @@
+- route:
+    from:
+      uri: kamelet:kafka-source
+      steps:
+        - log:
+            message: '"Boom, a message ${body}"'
+            loggingLevel: INFO
+        - choice:
+            when:
+              - expression:
+                  simple:
+                    expression: ${body} != null
+                steps:
+                  - setHeader:
+                      name: operation
+                      expression:
+                        jsonpath:
+                          expression: $.payload.op
+                      description: get operation value
+                  - setHeader:
+                      name: snapshot
+                      expression:
+                        jsonpath:
+                          expression: $.payload.source.snapshot
+                      description: get snapshot value
+                  - to:
+                      uri: direct:WorkOutWhatToDo
+                      description: How do I talk to the DB
+                  - marshal:
+                      json:
+                        library: jackson
+                  - log:
+                      message: done
+                  - choice:
+                      when:
+                        - expression:
+                            simple:
+                              expression: ${header.operation} == 'u'
+                          steps:
+                            - to:
+                                uri: kamelet:postgresql-sink
+                                parameters:
+                                  query: >-
+                                    UPDATE hero SET level = :#level, name =
+                                    :#name, othername = :#othername, picture =
+                                    :#picture, powers = :#powers  WHERE id =
+                                    :#id
+                                  databaseName: heroes_database
+                                  serverName: heroes-db
+                                  serverPort: 5432
+                                  username: superman
+                                  password: superman
+                                description: update DB
+                          description: Update Hero
+                        - expression:
+                            simple:
+                              expression: ${header.operation} == 'c'
+                          steps:
+                            - to:
+                                uri: kamelet:postgresql-sink
+                                parameters:
+                                  query: >-
+                                    INSERT INTO hero (id, level, name,
+                                    othername, picture, powers) VALUES (:#id,
+                                    :#level, :#name, :#othername, :#picture,
+                                    :#powers)
+                                  databaseName: heroes_database
+                                  serverName: heroes-db
+                                  serverPort: 5432
+                                  username: superman
+                                  password: superman
+                                  description: Insert DB
+                                description: Insert DB
+                          description: Create a new Hero
+                        - expression:
+                            simple:
+                              expression: ${header.operation} == 'd'
+                          steps:
+                            - to:
+                                uri: kamelet:postgresql-sink
+                                parameters:
+                                  query: DELETE FROM customers WHERE id=:#id
+                                  databaseName: heroes_database
+                                  serverName: heroes-db
+                                  serverPort: '5432'
+                                  username: superman
+                                  password: superman
+                                description: Delete DB
+                          description: Delete a Hero
+            otherwise:
+              steps:
+                - log:
+                    message: no message to process
+                    description: no message to process
+      parameters:
+        bootstrapServers: my-cluster-kafka-bootstrap.superheroes.svc:9092
+        topic: philsmac.phil.hero
+        user: test
+        password: test
+        securityProtocol: PLAINTEXT
+        consumerGroup: customers3
+        autoCommitEnable: true
+        autoOffsetReset: earliest
+- route:
+    from:
+      uri: direct:WorkOutWhatToDo
+      steps:
+        - choice:
+            when:
+              - expression:
+                  simple:
+                    expression: ${header.operation} == 'd'
+                steps:
+                  - setBody:
+                      expression:
+                        jsonpath:
+                          expression: $.payload.before
+                      description: set body to before payload
+                  - log:
+                      message: capture before for delete
+                      loggingLevel: INFO
+                description: operation = 'd'
+              - expression:
+                  simple:
+                    expression: ${header.snapshot} == 'true' && ${header.operation} == 'r'
+                steps:
+                  - setBody:
+                      expression:
+                        jsonpath:
+                          expression: $.payload.after
+                      description: set body to after payload
+                  - setHeader:
+                      name: operation
+                      expression:
+                        constant:
+                          expression: c
+                      description: set operation to c
+                  - log:
+                      message: snapsahot true and operation r ${body}
+                      loggingLevel: INFO
+                description: snapshot = 'true' and operation} = 'r'
+              - expression:
+                  simple:
+                    expression: ${header.snapshot} == 'last' && ${header.operation} == 'r'
+                steps:
+                  - setBody:
+                      expression:
+                        jsonpath:
+                          expression: $.payload.after
+                      description: set body to after payload
+                  - setHeader:
+                      name: operation
+                      expression:
+                        constant:
+                          expression: c
+                      description: set operation to c
+                  - log:
+                      message: snapsahot last and operation r
+                description: snapshot = 'last' and  operation} = 'r'
+            otherwise:
+              steps:
+                - setBody:
+                    expression:
+                      jsonpath:
+                        expression: $.payload.after
+                    description: set body to after payload
+                - log:
+                    message: normnal record. Continue as is
+                    loggingLevel: INFO
+    id: WorkOutwhatToDo
