@@ -277,7 +277,7 @@ oc exec -it my-cluster-kafka-0 -- /opt/kafka/bin/kafka-console-consumer.sh \
 
 ## Terminal window. 
 
-Create a termin window like this:
+Create a terminal window like this:
 
 ![Terminal window layout](images/cli.png)
 
